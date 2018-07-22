@@ -1,0 +1,150 @@
+<!--
+@license
+Copyright (c) 2016 The Polymer Project Authors. All rights reserved.
+This code may only be used under the BSD style license found at http://polymer.github.io/LICENSE.txt
+The complete set of authors may be found at http://polymer.github.io/AUTHORS.txt
+The complete set of contributors may be found at http://polymer.github.io/CONTRIBUTORS.txt
+Code distributed by Google as part of the polymer project is also
+subject to an additional IP rights grant found at http://polymer.github.io/PATENTS.txt
+-->
+
+<link rel="import" href="../bower_components/polymer/polymer.html">
+<link rel="import" href="../bower_components/neon-animation/web-animations.html">
+<link rel="import" href="../bower_components/polymerfire/polymerfire.html">
+<link rel="import" href="../bower_components/paper-dropdown-menu/paper-dropdown-menu.html">
+<link rel="import" href="../bower_components/paper-button/paper-button.html">
+<link rel="import" href="../bower_components/paper-dialog/paper-dialog.html">
+<link rel="import" href="../bower_components/paper-toast/paper-toast.html">
+<link rel="import" href="../bower_components/paper-listbox/paper-listbox.html">
+<link rel="import" href="../bower_components/paper-input/paper-input.html">
+<link rel="import" href="../bower_components/paper-input/paper-textarea.html">
+<link rel="import" href="../bower_components/paper-item/paper-item.html">
+<link rel="import" href="../bower_components/paper-fab/paper-fab.html">
+<link rel="import" href="../bower_components/iron-flex-layout/iron-flex-layout.html">
+<link rel="import" href="../bower_components/iron-image/iron-image.html">
+<link rel="import" href="shared-styles.html">
+<link rel="import" href="my-icons.html">
+
+<dom-module id="my-admin-home">
+    <template>
+        <style include="shared-styles">
+            :host {
+                display: block;
+                padding: 10px;
+            }
+        </style>
+
+        <firebase-query app-name="login" path$="events/[[user.uid]]" data="{{events}}"></firebase-query>
+        <firebase-document app-name="login" path="[[selectedEventPath]]" data="{{selectedEvent}}"></firebase-document>
+        <div class="card" id="home">
+            <h1>Welcome, [[userdata.username]] to my website.</h1>
+            <h2>You are the administrator.</h2>
+            <p>Create a new event or select an existing event.</p>
+            <paper-dropdown-menu label="Select event">
+                <paper-listbox id="listbox" slot="dropdown-content" selected="1" on-selected-item-changed="_selectedItemChanged">
+                    <dom-repeat items="[[events]]">
+                        <template>
+                            <paper-item name$="[[index]]">[[item.name]]</paper-item>
+                        </template>
+                    </dom-repeat>
+                </paper-listbox>
+            </paper-dropdown-menu>
+
+            <paper-dialog id="create">
+                <paper-input label="New Event name:" value="{{newEventName}}"></paper-input>
+                <paper-input label="New event summary:" value="{{newEventSummary}}"></paper-input>
+                <paper-textarea label="New event description:" value="{{newEventDescription}}"></paper-textarea>
+                <paper-button raised dialog-confirm on-tap="_createNewEvent">Create New Event</paper-button>
+            </paper-dialog>
+            <paper-dialog id="delete">
+                <h2>Delete Event</h2>
+                <p>About to delete the event: [[selectedEvent.name]]</p>
+                <p>Please confirm</p>
+                <div class="buttons">
+                    <paper-button raised dialog-dismiss on-tap="_deleteEvent">Yes</paper-button>
+                    <paper-button raised dialog-confirm autofocus>No</paper-button>
+                </div>
+            </paper-dialog>
+            <paper-fab class="create" title="Create new event" icon="my-icons:plus" on-tap="_createDialog"></paper-fab>
+            <paper-fab class="delete" title="Delete event" icon="my-icons:delete" on-tap="_deleteDialog"></paper-fab>
+
+            <paper-toast id="eventAlreadyExists" text="This event already exists"></paper-toast>
+            <h2>Currently Selected Event:</h2>
+            <paper-input label="Event name:" value="{{selectedEvent.name}}"></paper-input>
+            <paper-input label="Event summary:" value="{{selectedEvent.summary}}"></paper-input>
+            <paper-textarea label="Event description:" value="{{selectedEvent.description}}"></paper-textarea>
+        </div>
+    </template>
+
+    <script>
+        class MyAdminHome extends Polymer.Element {
+            static get is() {
+                return 'my-admin-home';
+            }
+
+            static get properties() {
+                return {
+                    user: Object,
+                    newEventName: String,
+                    newEventSummary: String,
+                    newEventDescription: String,
+                    selectedEvent: Object,
+                    userdata: Object,
+                    selectedEventPath: String,
+                    events: {
+                        type: Array,
+                        value: []
+                    }
+                };
+            }
+
+            _createDialog() {
+                this.$.create.open();
+            }
+
+            _deleteDialog() {
+                this.$.delete.open();
+            }
+
+            _createNewEvent() {
+                if (this.newEventName !== "") {
+                    // Already in the list?
+                    let existing = this.events.find(x => x.name == this.newEventName)
+                    if (existing == undefined) {
+                        existing = {
+                            name: this.newEventName,
+                            summary: this.newEventSummary,
+                            description: this.newEventDescription,
+                            /* eventKey: firebase.database(this.firebaseApp.app).ref('event/' + this.user.uid)
+                                .push(
+                                    true).key */
+                        };
+                        firebase.database(this.firebaseApp.app).ref('events/' + this.user.uid).push(existing);
+                        this.currentEvent = existing;
+                        existing = this.events.find(x => x.name == this.newEventName);
+                    } else {
+                        this.$.eventAlreadyExists.fitInto = this.$.home;
+                        this.$.eventAlreadyExists.open();
+                    }
+                    // Select the created event
+                    this.$.listbox.selected = this.events.indexOf(existing);
+                }
+            }
+            _deleteEvent() {
+                if (this.selectedEvent.name !== "") {
+                    // Delete Event list
+                    firebase.database(this.firebaseApp.app).ref(this.selectedEventPath).remove();
+                }
+            }
+            _selectedItemChanged(e) {
+                if (e.detail.value !== null) {
+                    let index = e.detail.value.getAttribute("name");
+                    this.currentEvent = this.events[index];
+                    this.selectedEventPath = "events/" + this.user.uid + "/" + this.currentEvent.$key;
+                }
+            }
+        }
+
+        window.customElements.define(MyAdminHome.is, MyAdminHome);
+    </script>
+</dom-module>
